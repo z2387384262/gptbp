@@ -37,8 +37,11 @@ function getModelOptimalParams(modelKey, modelId) {
 
     case 'gpt-oss-120b':
     case 'gpt-oss-20b':
-      // GPT模型使用最简配置，不添加任何额外参数
-      return {};
+      return {
+        stream: false,
+        max_tokens: 4096,
+        temperature: 0.6
+      };
 
     case 'llama-4-scout':
       return {
@@ -112,7 +115,7 @@ const MODEL_CONFIG = {
     "output_price": 0.75,
     "input_price": 0.35,
     "output_price": 0.75,
-    "use_input": true,
+    "use_messages": true,
     "features": ["通用对话", "文本分析", "创意写作"]
   },
   "gpt-oss-20b": {
@@ -127,7 +130,7 @@ const MODEL_CONFIG = {
     "output_price": 0.30,
     "input_price": 0.20,
     "output_price": 0.30,
-    "use_input": true,
+    "use_messages": true,
     "features": ["快速响应", "实时对话", "简单任务"]
   },
   "llama-3.1-70b": {
