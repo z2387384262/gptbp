@@ -115,7 +115,7 @@ const MODEL_CONFIG = {
     "output_price": 0.75,
     "input_price": 0.35,
     "output_price": 0.75,
-    "use_messages": true,
+    "use_input": true,
     "features": ["通用对话", "文本分析", "创意写作"]
   },
   "gpt-oss-20b": {
@@ -130,7 +130,7 @@ const MODEL_CONFIG = {
     "output_price": 0.30,
     "input_price": 0.20,
     "output_price": 0.30,
-    "use_messages": true,
+    "use_input": true,
     "features": ["快速响应", "实时对话", "简单任务"]
   },
   "llama-3.1-70b": {
@@ -601,10 +601,11 @@ async function handleOpenAIChat(request, env, corsHeaders) {
 
         // GPT-OSS 必须使用 input，且不能包含 raw 参数
         if (selectedModel.use_input || selectedModel.id.includes('gpt-oss')) {
-          // 极简模式：只传 input，防止其他参数导致 3030 错误
-          // getModelOptimalParams 可能会返回 null 或者不兼容的 stream 参数，先不合并
+          // 极简 + 必须参数模式
+          // 3030 错误可能是因为缺 max_tokens 或者多了 stream
           params = {
-            input: fullPrompt
+            input: fullPrompt,
+            max_tokens: 4096
           };
         } else {
           // DeepSeek / Gemma 使用 prompt
