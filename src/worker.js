@@ -679,9 +679,18 @@ async function handleOpenAIChat(request, env, corsHeaders) {
 
     // 修复 Qwen/DeepSeek 可能把工具调用包裹在 markdown 代码块里的问题
     // Roo Code 需要原始的 XML 标签，不能被 ```xml ... ``` 包裹
-    if (replyText && (replyText.includes('<tool_code>') || replyText.includes('<read_file>') || replyText.includes('<attempt_completion>'))) {
-      // 移除 ```xml 和 ```
-      replyText = replyText.replace(/```xml\s*/g, '').replace(/```\s*/g, '');
+    if (replyText) {
+      // 1. 尝试反转义 HTML (防止 Cloudflare 返回 &lt;)
+      replyText = replyText
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"');
+
+      // 2. 移除 markdown 代码块包裹
+      if (replyText.includes('<tool_code>') || replyText.includes('<read_file>') || replyText.includes('<attempt_completion>') || replyText.includes('<list_files>')) {
+        replyText = replyText.replace(/```xml\s*/gi, '').replace(/```\s*/g, '');
+      }
     }
 
     // 处理 DeepSeek 的 <think> 标签 (移除)
