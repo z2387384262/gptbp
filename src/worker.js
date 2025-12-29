@@ -106,7 +106,9 @@ const MODEL_CONFIG = {
     "max_output": 4096,
     "input_price": 0.35,
     "output_price": 0.75,
-    "use_input": true,
+    "input_price": 0.35,
+    "output_price": 0.75,
+    "use_prompt": true,
     "features": ["通用对话", "文本分析", "创意写作"]
   },
   "gpt-oss-20b": {
@@ -117,7 +119,7 @@ const MODEL_CONFIG = {
     "max_output": 2048,
     "input_price": 0.20,
     "output_price": 0.30,
-    "use_input": true,
+    "use_prompt": true,
     "features": ["快速响应", "实时对话", "简单任务"]
   },
   "llama-3.1-70b": {
@@ -550,53 +552,89 @@ async function handleOpenAIChat(request, env, corsHeaders) {
 
     // 3. 构建 Prompt 并调用 AI
     try {
-      if (selectedModel.use_messages) {
-        // 直接传递 messages
-        // 确保有一个 system prompt
-        const hasSystem = messages.some(m => m.role === 'system');
-        const processedMessages = messages.map(m => ({ role: m.role, content: m.content }));
+      // 统一处理 prompt 模式 (DeepSeek, GPT-OSS, Gemma)
+      // 这比 use_input 或 use_messages 更稳定，因为我们可以控制格式
+      if (selectedModel.use_prompt || selectedModel.use_input) {
+        let promptKey = "prompt";
 
-        if (!hasSystem) {
-          processedMessages.unshift({ role: "system", content: "You are a helpful AI assistant. Answer in the language the user asks." });
+        // 构建 Prompt 字符串
+        let fullPrompt = messages.reduce((acc, msg) => {
+          let content = "";
+          // 处理多模态/数组内容
+          if (Array.isArray(msg.content)) {
+            content = msg.content
+              .filter(c => c.type === 'text')
+              .map(c => c.text)
+              .join('\n');
+          } else {
+            content = msg.content || "";
+          }
+
+          let roleLabel = "";
+          switch (msg.role) {
+            case 'system': roleLabel = "System"; break;
+            case 'user': roleLabel = "User"; break;
+            case 'assistant': roleLabel = "Assistant"; break;
+            case 'tool': roleLabel = "Tool Output"; break; // 将工具输出转换为文本
+            default: roleLabel = "User"; break;
+          }
+
+          return acc + `${roleLabel}: ${content}\n`;
+        }, "");
+
+        // 确保以 Assistant 结尾引导生成
+        fullPrompt += "Assistant:";
+
+        const params = {
+          prompt: fullPrompt,
+          raw: true, // 启用 raw 模式防止模板干扰
+          ...getModelOptimalParams(model, selectedModel.id)
+        };
+
+        // GPT-OSS 可能需要 input 参数而不是 prompt
+        if (selectedModel.id.includes('gpt-oss')) {
+          delete params.prompt;
+          params.input = fullPrompt; // GPT-OSS 通常使用 'input'
         }
 
-        const params = {
-          messages: processedMessages,
-          ...getModelOptimalParams(model, selectedModel.id)
-        };
-        // 强制关闭 stream
-        params.stream = false;
-
-        response = await env.AI.run(selectedModel.id, params);
-        replyText = extractTextFromResponse(response, selectedModel);
-
-      } else if (selectedModel.use_prompt) {
-        // 将 messages 转换为 prompt string
-        const prompt = messages.map(m => {
-          // 简单的 ChatML 风格或者 User/Assistant 风格
-          // DeepSeek 推荐 User: / Assistant: 或者 standard prompt
-          return `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`;
-        }).join('\n') + "\nAssistant:";
-
-        const params = {
-          prompt: prompt,
-          raw: true, // 尝试 raw 模式以避免模板问题
-          ...getModelOptimalParams(model, selectedModel.id)
-        };
-        // 确保不传 stream
         delete params.stream;
 
         response = await env.AI.run(selectedModel.id, params);
         replyText = extractTextFromResponse(response, selectedModel);
 
-      } else if (selectedModel.use_input) {
-        // GPT-OSS 等
-        const lastMsg = messages[messages.length - 1];
-        const input = lastMsg ? lastMsg.content : "Hello";
+      } else if (selectedModel.use_messages) {
+        // Qwen, Llama 等支持 messages 的模型
+        // 需要过滤不支持的 role (如 tool)
+
+        const validMessages = messages.map(m => {
+          let role = m.role;
+          let content = m.content;
+          if (Array.isArray(content)) {
+            content = content
+              .filter(c => c.type === 'text')
+              .map(c => c.text)
+              .join('\n');
+          }
+
+          // 将 tool 消息转换为 user 消息，以免报错
+          if (role === 'tool' || role === 'function') {
+            role = 'user';
+            content = `[Tool Output]: ${content}`;
+          }
+
+          return { role, content };
+        }).filter(m => ['system', 'user', 'assistant'].includes(m.role));
+
+        // 确保有 System Prompt
+        if (!validMessages.some(m => m.role === 'system')) {
+          validMessages.unshift({ role: "system", content: "You are a helpful AI assistant." });
+        }
 
         const params = {
-          input: input
+          messages: validMessages,
+          ...getModelOptimalParams(model, selectedModel.id)
         };
+        delete params.stream;
 
         response = await env.AI.run(selectedModel.id, params);
         replyText = extractTextFromResponse(response, selectedModel);
