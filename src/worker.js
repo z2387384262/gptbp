@@ -645,14 +645,11 @@ async function handleOpenAIChat(request, env, corsHeaders) {
             content = `[Tool Output]: ${content}`;
           }
 
-          // GPT-OSS 可能不喜欢 system 角色，或者不喜欢 tool_calls 字段
-          // 我们只保留 role 和 content，绝对不传其他字段
+          // 重要：保留 System Prompt
+          // Roo Code 的 System Prompt 包含工具定义，必须保留 role="system"
+
           return { role, content };
         }).filter(m => m.content.trim() !== ""); // 过滤空消息
-
-        // 确保有 System Prompt (如果模型支持)
-        // 为了最大兼容性，我们可以把 system 转为 user，或者保留
-        // 这里暂时保留 system，但确保它是第一条
 
         const params = {
           messages: validMessages,
