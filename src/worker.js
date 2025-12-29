@@ -656,7 +656,7 @@ async function handleOpenAIChat(request, env, corsHeaders) {
         if (selectedModel.id.includes('qwen') || selectedModel.id.includes('deepseek')) {
           validMessages.push({
             role: 'user',
-            content: "(System Note: Please strictly follow the tool use format defined in the system prompt. Do not just output text. If you need to perform an action, output the XML tool call block.)"
+            content: "(System Note: You MUST use XML tags for tool calls. Example: <read_file><path>README.md</path></read_file>. Do NOT use markdown code blocks or [] brackets. Output the raw XML directly.)"
           });
         }
 
