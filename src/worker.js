@@ -651,6 +651,15 @@ async function handleOpenAIChat(request, env, corsHeaders) {
           return { role, content };
         }).filter(m => m.content.trim() !== ""); // 过滤空消息
 
+        // 强力补丁：对于 Qwen Coder，在最后追加一条 System/User 提示，强制它调用工具
+        // 防止它只聊天不干活
+        if (selectedModel.id.includes('qwen') || selectedModel.id.includes('deepseek')) {
+          validMessages.push({
+            role: 'user',
+            content: "(System Note: Please strictly follow the tool use format defined in the system prompt. Do not just output text. If you need to perform an action, output the XML tool call block.)"
+          });
+        }
+
         const params = {
           messages: validMessages,
           ...getModelOptimalParams(model, selectedModel.id)
