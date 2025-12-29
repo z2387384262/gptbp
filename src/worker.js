@@ -697,7 +697,49 @@ async function handleOpenAIChat(request, env, corsHeaders) {
       }
     }
 
+    // 4. 解析 XML 工具调用并转换为 Native OpenAI Tool Calls
+    // 如果客户端期望 native tool format (如 Roo Code 使用 'openai' provider)，它会忽略 content 中的 XML
+    // 所以我们需要把 XML 解析出来放到 tool_calls 字段里
+    const toolCalls = parseToolCallsFromXml(replyText);
+
+    // 如果解析出了工具调用
+    let finishReason = "stop";
+    let messageContent = replyText;
+
+    if (toolCalls && toolCalls.length > 0) {
+      finishReason = "tool_calls";
+      // 如果是 native tool call，通常 content 应该为空或者只包含思考过程
+      // 但为了稳妥，我们可以保留 content，或者为了避免重复解析问题，我们可以将其设为 null
+      // 这里尝试保留 content，看 Roo Code 是否兼容
+      // messageContent = null; 
+    }
+
     // 处理 DeepSeek 的 <think> 标签 (移除)
+    // 如果请求中包含可能需要工具调用的意图，但模型回复未包含 XML 工具标签，则尝试用更严格的提示重试一次
+    try {
+      const toolIntentRegex = /\b(read file|read_file|list files|list_files|open file|show file|read dir|list directory|ls\(|read the file|write file|write to file)\b/i;
+      const xmlTagRegex = /<read_file>|<list_files>|<write_file>|<list_files>|<read_dir>/i;
+
+      // 将原始消息内容合并为字符串以检测意图
+      const allMessagesText = Array.isArray(messages) ? messages.map(m => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))).join('\n') : '';
+
+      if (toolIntentRegex.test(allMessagesText) && !xmlTagRegex.test(replyText || '')) {
+        console.log('可能需要工具调用，但回复未包含 XML 标签，尝试重试一次以强制输出工具调用。');
+        const retryResp = await attemptToolRetry(env, selectedModel, messages, model);
+        if (retryResp) {
+          const retryText = extractTextFromResponse(retryResp, selectedModel);
+          if (xmlTagRegex.test(retryText || '')) {
+            console.log('重试成功，使用重试响应中的工具调用输出。');
+            replyText = retryText;
+            response = retryResp;
+          } else {
+            console.log('重试未产出预期的 XML 工具标签，保留原始回复。');
+          }
+        }
+      }
+    } catch (retryErr) {
+      console.error('工具调用重试过程出错:', retryErr);
+    }
     if (selectedModel.id.includes('deepseek') && replyText.includes('<think>')) {
       const thinkEndIndex = replyText.lastIndexOf('</think>');
       if (thinkEndIndex !== -1) {
@@ -716,9 +758,10 @@ async function handleOpenAIChat(request, env, corsHeaders) {
           index: 0,
           message: {
             role: "assistant", // 必须是 assistant
-            content: replyText // 必须包含 content
+            content: messageContent, // 必须包含 content
+            tool_calls: (toolCalls && toolCalls.length > 0) ? toolCalls : undefined
           },
-          finish_reason: "stop"
+          finish_reason: finishReason
         }
       ],
       usage: {
@@ -814,6 +857,53 @@ function extractTextFromResponse(response, modelConfig) {
   // 如果还是找不到，返回完整的响应用于调试
   console.log('无法提取文本，完整响应:', JSON.stringify(response, null, 2));
   return `无法从响应中提取文本内容。响应结构: ${Object.keys(response).join(', ')}`;
+}
+
+// 解析 XML 工具调用为 OpenAI Tool Calls 格式
+function parseToolCallsFromXml(text) {
+  if (!text) return null;
+
+  const toolCalls = [];
+  // 匹配 <tool_name>...</tool_name>
+  //这里假设工具之间通过换行或其他字符分隔，或者紧挨着
+  // 简单的正则匹配顶层标签
+  const toolRegex = /<(\w+)>(?:[\s\S]*?)<\/\1>/g;
+  let match;
+
+  while ((match = toolRegex.exec(text)) !== null) {
+    const toolName = match[1];
+    const innerContent = match[0].substring(toolName.length + 2, match[0].length - toolName.length - 3);
+
+    // 将 XML 参数转换为 JSON 参数
+    // 假设参数是 <param>value</param> 格式
+    const args = {};
+    const paramRegex = /<(\w+)>(?:[\s\S]*?)<\/\1>/g;
+    let paramMatch;
+    let hasParams = false;
+
+    while ((paramMatch = paramRegex.exec(innerContent)) !== null) {
+      hasParams = true;
+      const paramName = paramMatch[1];
+      const paramValue = paramMatch[0].substring(paramName.length + 2, paramMatch[0].length - paramName.length - 3);
+      args[paramName] = paramValue;
+    }
+
+    // 如果没有子标签，可能整个内容就是参数，或者无参数
+    // 但 Roo Code 的 XML 格式通常是嵌套的。
+    // 兼容 <list_files><path>...</path></list_files>
+
+    // 构造 tool_call 对象
+    toolCalls.push({
+      id: `call_${Math.random().toString(36).substring(2, 10)}`,
+      type: 'function',
+      function: {
+        name: toolName,
+        arguments: JSON.stringify(args)
+      }
+    });
+  }
+
+  return toolCalls.length > 0 ? toolCalls : null;
 }
 
 // 如果怀疑模型应该发起工具调用但没有返回 XML 标签，则尝试用更严格的提示重试一次
