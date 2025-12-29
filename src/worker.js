@@ -110,7 +110,9 @@ const MODEL_CONFIG = {
     "output_price": 0.75,
     "input_price": 0.35,
     "output_price": 0.75,
-    "use_messages": true,
+    "input_price": 0.35,
+    "output_price": 0.75,
+    "use_input": true,
     "features": ["通用对话", "文本分析", "创意写作"]
   },
   "gpt-oss-20b": {
@@ -123,7 +125,9 @@ const MODEL_CONFIG = {
     "output_price": 0.30,
     "input_price": 0.20,
     "output_price": 0.30,
-    "use_messages": true,
+    "input_price": 0.20,
+    "output_price": 0.30,
+    "use_input": true,
     "features": ["快速响应", "实时对话", "简单任务"]
   },
   "llama-3.1-70b": {
@@ -589,16 +593,23 @@ async function handleOpenAIChat(request, env, corsHeaders) {
         // 确保以 Assistant 结尾引导生成
         fullPrompt += "Assistant:";
 
-        const params = {
-          prompt: fullPrompt,
-          raw: true, // 启用 raw 模式防止模板干扰
-          ...getModelOptimalParams(model, selectedModel.id)
-        };
+        // 构造参数
+        let params = {};
 
-        // GPT-OSS 可能需要 input 参数而不是 prompt
-        if (selectedModel.id.includes('gpt-oss')) {
-          delete params.prompt;
-          params.input = fullPrompt; // GPT-OSS 通常使用 'input'
+        // GPT-OSS 必须使用 input，且不能包含 raw 参数
+        if (selectedModel.use_input || selectedModel.id.includes('gpt-oss')) {
+          params = {
+            input: fullPrompt,
+            // GPT-OSS 不包含 raw 参数
+            ...getModelOptimalParams(model, selectedModel.id)
+          };
+        } else {
+          // DeepSeek / Gemma 使用 prompt
+          params = {
+            prompt: fullPrompt,
+            raw: true,
+            ...getModelOptimalParams(model, selectedModel.id)
+          };
         }
 
         delete params.stream;
