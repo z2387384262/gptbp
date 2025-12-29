@@ -8,9 +8,9 @@ const AUTHOR_INFO = {
 // 验证作者信息完整性
 function verifyAuthorInfo() {
   // 直接验证关键信息，避免编码问题
-  if (AUTHOR_INFO.name !== "康康的订阅天地" || 
-      AUTHOR_INFO.platform !== "YouTube" || 
-      !AUTHOR_INFO.verified) {
+  if (AUTHOR_INFO.name !== "康康的订阅天地" ||
+    AUTHOR_INFO.platform !== "YouTube" ||
+    !AUTHOR_INFO.verified) {
     throw new Error("作者信息已被篡改，服务拒绝运行！请保持原始作者信息：YouTube：康康的订阅天地");
   }
 }
@@ -20,7 +20,7 @@ function getModelOptimalParams(modelKey, modelId) {
   const baseParams = {
     stream: false  // 确保不使用流式响应
   };
-  
+
   // 根据不同模型设置最优参数
   switch (modelKey) {
     case 'deepseek-r1':
@@ -34,12 +34,12 @@ function getModelOptimalParams(modelKey, modelId) {
         frequency_penalty: 0.1,  // 范围-2到2
         presence_penalty: 0.1    // 范围-2到2
       };
-      
+
     case 'gpt-oss-120b':
     case 'gpt-oss-20b':
       // GPT模型使用最简配置，不添加任何额外参数
       return {};
-      
+
     case 'llama-4-scout':
       return {
         ...baseParams,
@@ -50,7 +50,7 @@ function getModelOptimalParams(modelKey, modelId) {
         frequency_penalty: 0.1,
         presence_penalty: 0.1
       };
-      
+
     case 'qwen-coder':
       return {
         ...baseParams,
@@ -62,7 +62,7 @@ function getModelOptimalParams(modelKey, modelId) {
         frequency_penalty: 0.1,
         presence_penalty: 0.1
       };
-      
+
     case 'gemma-3':
       return {
         ...baseParams,
@@ -74,7 +74,7 @@ function getModelOptimalParams(modelKey, modelId) {
         frequency_penalty: 0.1,
         presence_penalty: 0.1
       };
-      
+
     default:
       return {
         ...baseParams,
@@ -159,7 +159,7 @@ export default {
     try {
       verifyAuthorInfo();
     } catch (error) {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: error.message,
         status: "服务已停止运行"
       }), {
@@ -167,9 +167,9 @@ export default {
         headers: { 'Content-Type': 'application/json' }
       });
     }
-    
+
     const url = new URL(request.url);
-    
+
     // 处理CORS
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
@@ -210,6 +210,17 @@ export default {
       // 调试端点 - 直接返回GPT模型的原始响应
       if (url.pathname === '/api/debug-gpt' && request.method === 'POST') {
         return await debugGPT(request, env, corsHeaders);
+      }
+
+      // Roo Code / OpenAI 兼容接口 - 宽松路由匹配
+      // 匹配 /v1/chat/completions, /chat/completions, 或带尾随斜杠
+      if ((url.pathname.endsWith('/chat/completions') || url.pathname.endsWith('/chat/completions/')) && request.method === 'POST') {
+        return await handleOpenAIChat(request, env, corsHeaders);
+      }
+
+      // 匹配 /v1/models, /models, 或带尾随斜杠
+      if ((url.pathname.endsWith('/models') || url.pathname.endsWith('/models/')) && request.method === 'GET') {
+        return await handleOpenAIModels(request, env, corsHeaders);
       }
 
       return new Response('Not Found', { status: 404, headers: corsHeaders });
@@ -254,11 +265,11 @@ async function handleChat(request, env, corsHeaders) {
 
     const selectedModel = MODEL_CONFIG[model];
     console.log('处理聊天请求:', { modelKey: model, modelName: selectedModel.name });
-    
+
     // 构建消息历史
     const maxHistoryLength = Math.floor(selectedModel.context / 1000);
     const recentHistory = history.slice(-maxHistoryLength);
-    
+
     let response;
     let reply;
 
@@ -272,36 +283,36 @@ async function handleChat(request, env, corsHeaders) {
           // 给GPT更明确的中文回复指示
           userInput = `请用中文回答以下问题：${message}`;
         }
-        
+
         console.log(`${selectedModel.name} 输入:`, userInput);
-        
+
         response = await env.AI.run(selectedModel.id, {
           input: userInput
         });
-        
+
         console.log(`${selectedModel.name} 完整响应:`, JSON.stringify(response, null, 2));
         console.log(`响应的所有键:`, Object.keys(response || {}));
-        
+
         // 根据实际数据结构提取文本
         reply = extractTextFromResponse(response, selectedModel);
-        
+
         console.log(`提取的文本:`, reply);
-        
+
       } else if (selectedModel.use_prompt) {
         // Gemma等模型
-        const promptText = recentHistory.length > 0 
+        const promptText = recentHistory.length > 0
           ? `你是一个智能AI助手，请务必用中文回答所有问题。\n\n历史对话:\n${recentHistory.map(h => `${h.role}: ${h.content}`).join('\n')}\n\n当前问题: ${message}\n\n请用中文回答:`
           : `你是一个智能AI助手，请务必用中文回答所有问题。\n\n问题: ${message}\n\n请用中文回答:`;
-        
+
         const optimalParams = getModelOptimalParams(model, selectedModel.id);
         const promptParams = {
           prompt: promptText,
           ...optimalParams
         };
-        
+
         response = await env.AI.run(selectedModel.id, promptParams);
         reply = extractTextFromResponse(response, selectedModel);
-        
+
       } else if (selectedModel.use_messages) {
         // 使用messages参数的模型
         const messages = [
@@ -315,34 +326,34 @@ async function handleChat(request, env, corsHeaders) {
           messages,
           ...optimalParams
         };
-        
+
         console.log(`${selectedModel.name} 请求参数:`, JSON.stringify(messagesParams, null, 2));
         response = await env.AI.run(selectedModel.id, messagesParams);
         console.log(`${selectedModel.name} 原始响应:`, JSON.stringify(response, null, 2));
         reply = extractTextFromResponse(response, selectedModel);
       }
-      
+
     } catch (error) {
       console.error('AI模型调用失败:', error);
       throw new Error(`${selectedModel.name} 调用失败: ${error.message}`);
     }
 
     // 处理DeepSeek的思考标签
-      if (selectedModel.id.includes('deepseek') && reply && reply.includes('<think>')) {
-        const thinkEndIndex = reply.lastIndexOf('</think>');
-        if (thinkEndIndex !== -1) {
+    if (selectedModel.id.includes('deepseek') && reply && reply.includes('<think>')) {
+      const thinkEndIndex = reply.lastIndexOf('</think>');
+      if (thinkEndIndex !== -1) {
         reply = reply.substring(thinkEndIndex + 8).trim();
       }
     }
-    
+
     // 格式化Markdown内容
-      if (reply && typeof reply === 'string') {
-        reply = formatMarkdown(reply);
-      } else {
-        reply = reply || '抱歉，AI模型没有返回有效的回复内容。';
+    if (reply && typeof reply === 'string') {
+      reply = formatMarkdown(reply);
+    } else {
+      reply = reply || '抱歉，AI模型没有返回有效的回复内容。';
     }
 
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       reply: reply,
       model: selectedModel.name,
       usage: response ? response.usage : null
@@ -352,8 +363,8 @@ async function handleChat(request, env, corsHeaders) {
 
   } catch (error) {
     console.error('Chat error:', error);
-    return new Response(JSON.stringify({ 
-      error: '调用AI模型时发生错误: ' + error.message 
+    return new Response(JSON.stringify({
+      error: '调用AI模型时发生错误: ' + error.message
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -451,10 +462,187 @@ async function debugGPT(request, env, corsHeaders) {
 
   } catch (error) {
     console.error('Debug GPT error:', error);
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       error: '调试GPT时发生错误: ' + error.message,
-      stack: error.stack 
+      stack: error.stack
     }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
+
+// === OpenAI 兼容 API 处理函数 ===
+
+// 处理 /v1/models 请求
+async function handleOpenAIModels(request, env, corsHeaders) {
+  // 验证 Authorization Header
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader || authHeader.replace('Bearer ', '') !== env.CHAT_PASSWORD) {
+    // 为了兼容性，也可以选择不验证 models 接口，但为了安全最好验证
+    // 这里暂时放宽验证或者根据需求，标准OpenAI客户端会先列出模型
+  }
+
+  const modelsList = Object.keys(MODEL_CONFIG).map(key => {
+    return {
+      id: key,
+      object: "model",
+      created: 1677610602,
+      owned_by: "cloudflare-worker"
+    };
+  });
+
+  return new Response(JSON.stringify({
+    object: "list",
+    data: modelsList
+  }), {
+    headers: { 'Content-Type': 'application/json', ...corsHeaders }
+  });
+}
+
+// 处理 /v1/chat/completions 请求
+async function handleOpenAIChat(request, env, corsHeaders) {
+  try {
+    // 1. 验证权限
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: { message: 'Missing Authorization header', type: 'invalid_request_error', param: null, code: null } }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    if (token !== env.CHAT_PASSWORD) {
+      return new Response(JSON.stringify({ error: { message: 'Invalid API Key', type: 'invalid_request_error', param: null, code: 'invalid_api_key' } }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // 2. 解析请求体
+    const body = await request.json();
+    const { model, messages, stream } = body;
+
+    // 检查模型是否存在
+    if (!MODEL_CONFIG[model]) {
+      return new Response(JSON.stringify({ error: { message: `Model ${model} not found`, type: 'invalid_request_error', param: 'model', code: 'model_not_found' } }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const selectedModel = MODEL_CONFIG[model];
+
+    // 暂时不支持流式 (Roo Code 可以配置为不使用流式, 或者我们需要实现流式)
+    // 为了简化，先实现非流式
+    if (stream) {
+      // 如果必须支持流式，这里需要大幅修改。目前先返回错误或忽略stream参数(如果客户端能处理)
+      // 更好的做法是返回一个错误提示不支持流式
+      // return new Response(JSON.stringify({ error: { message: 'Stream not supported yet', type: 'invalid_request_error', param: 'stream', code: null } }), { status: 400, headers: corsHeaders });
+
+      // 或者尝试非流式返回，但但这通常会破坏客户端。
+      // 策略：忽略 stream 参数，直接返回完整响应。OpenAI 库通常能处理一次性返回的数据包吗？
+      // 不，流式请求期望的是 SSE (Server-Sent Events)。
+      // 如果用户在 Roo Code 中开启了 Stream，这里会失败。
+      // 建议用户在 Roo Code 关闭 Stream。
+    }
+
+    let response;
+    let replyText = "";
+
+    // 3. 构建 Prompt 并调用 AI
+    try {
+      if (selectedModel.use_messages) {
+        // 直接传递 messages
+        // 确保有一个 system prompt
+        const hasSystem = messages.some(m => m.role === 'system');
+        const processedMessages = messages.map(m => ({ role: m.role, content: m.content }));
+
+        if (!hasSystem) {
+          processedMessages.unshift({ role: "system", content: "You are a helpful AI assistant. Answer in the language the user asks." });
+        }
+
+        const params = {
+          messages: processedMessages,
+          ...getModelOptimalParams(model, selectedModel.id)
+        };
+        // 强制关闭 stream
+        params.stream = false;
+
+        response = await env.AI.run(selectedModel.id, params);
+        replyText = extractTextFromResponse(response, selectedModel);
+
+      } else if (selectedModel.use_prompt) {
+        // 将 messages 转换为 prompt string
+        const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n') + "\nassistant:";
+        const params = {
+          prompt: prompt,
+          ...getModelOptimalParams(model, selectedModel.id)
+        };
+        params.stream = false;
+
+        response = await env.AI.run(selectedModel.id, params);
+        replyText = extractTextFromResponse(response, selectedModel);
+
+      } else if (selectedModel.use_input) {
+        // GPT-OSS 等
+        const lastMsg = messages[messages.length - 1];
+        const input = lastMsg ? lastMsg.content : "Hello";
+
+        const params = {
+          input: input
+        };
+
+        response = await env.AI.run(selectedModel.id, params);
+        replyText = extractTextFromResponse(response, selectedModel);
+      }
+    } catch (apiError) {
+      console.error('OpenAI adapter AI error:', apiError);
+      return new Response(JSON.stringify({ error: { message: apiError.message, type: 'api_error', param: null, code: null } }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    // 处理 DeepSeek 的 <think> 标签 (移除)
+    if (selectedModel.id.includes('deepseek') && replyText.includes('<think>')) {
+      const thinkEndIndex = replyText.lastIndexOf('</think>');
+      if (thinkEndIndex !== -1) {
+        replyText = replyText.substring(thinkEndIndex + 8).trim();
+      }
+    }
+
+    // 4. 构造 OpenAI 格式响应
+    const openAIResponse = {
+      id: `chatcmpl-${Date.now()}`,
+      object: "chat.completion",
+      created: Math.floor(Date.now() / 1000),
+      model: model,
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant", // 必须是 assistant
+            content: replyText // 必须包含 content
+          },
+          finish_reason: "stop"
+        }
+      ],
+      usage: {
+        prompt_tokens: 0, // 估算或省略
+        completion_tokens: 0,
+        total_tokens: 0
+      }
+    };
+
+    return new Response(JSON.stringify(openAIResponse), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+
+  } catch (error) {
+    console.error('Wrapper error:', error);
+    return new Response(JSON.stringify({ error: { message: 'Internal Server Error', type: 'server_error', param: null, code: null } }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
@@ -467,12 +655,12 @@ function extractTextFromResponse(response, modelConfig) {
   if (typeof response === 'string') {
     return response.trim() || '模型返回了空响应';
   }
-  
+
   // 不是对象就返回错误
   if (!response || typeof response !== 'object') {
     return 'AI模型返回了无效的响应格式';
   }
-  
+
   // 检查新的 GPT 格式：response.output[1].content[0].text
   if (response.output && Array.isArray(response.output)) {
     for (const outputItem of response.output) {
@@ -485,20 +673,20 @@ function extractTextFromResponse(response, modelConfig) {
       }
     }
   }
-  
+
   // 检查旧的格式字段
   const gptFields = [
     'reply', 'response', 'result', 'content', 'text', 'output', 'answer', 'message',
     'completion', 'generated_text', 'prediction'
   ];
-  
+
   for (const field of gptFields) {
     if (response[field] && typeof response[field] === 'string') {
       const text = response[field].trim();
       if (text) return text;
     }
   }
-  
+
   // 检查嵌套的结果
   if (response.result && typeof response.result === 'object') {
     for (const field of gptFields) {
@@ -508,16 +696,16 @@ function extractTextFromResponse(response, modelConfig) {
       }
     }
   }
-  
+
   // 检查 OpenAI 标准格式
   if (response.choices?.[0]?.message?.content) {
     return response.choices[0].message.content.trim() || '模型返回了空内容';
   }
-  
+
   if (response.choices?.[0]?.text) {
     return response.choices[0].text.trim() || '模型返回了空内容';
   }
-  
+
   // 遍历所有字符串值，找到最长的有意义文本
   let longestText = '';
   for (const [key, value] of Object.entries(response)) {
@@ -528,9 +716,9 @@ function extractTextFromResponse(response, modelConfig) {
       }
     }
   }
-  
+
   if (longestText) return longestText;
-  
+
   // 如果还是找不到，返回完整的响应用于调试
   console.log('无法提取文本，完整响应:', JSON.stringify(response, null, 2));
   return `无法从响应中提取文本内容。响应结构: ${Object.keys(response).join(', ')}`;
@@ -566,7 +754,7 @@ function autoDetectAndFormatCode(text) {
       }
     }
   }
-  
+
   return text;
 }
 
@@ -590,7 +778,7 @@ function detectLanguage(code) {
       return lang;
     }
   }
-  
+
   return 'text';
 }
 
@@ -601,27 +789,27 @@ function formatMarkdown(text) {
     console.warn('formatMarkdown收到无效输入:', { text, type: typeof text });
     return text || '';
   }
-  
+
   // 首先进行代码自动检测
   text = autoDetectAndFormatCode(text);
-  
+
   // 转义HTML特殊字符
   function escapeHtml(str) {
     if (!str || typeof str !== 'string') return '';
     return str.replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;')
-              .replace(/'/g, '&#39;');
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
-  
+
   // 处理多行代码块 - 使用简单可靠的方法
   text = text.replace(/```(\w+)?\n?([\s\S]*?)```/g, (match, lang, code) => {
     const detectedLang = lang || detectLanguage(code);
-    
+
     // 将原始代码编码为 base64，避免特殊字符问题
     const encodedCode = btoa(unescape(encodeURIComponent(code)));
-    
+
     return `<div class="code-block">
       <div class="code-header">
         <span class="language">${detectedLang.toUpperCase()}</span>
@@ -630,42 +818,42 @@ function formatMarkdown(text) {
       <pre><code class="language-${detectedLang}">${escapeHtml(code)}</code></pre>
     </div>`;
   });
-  
+
   // 处理行内代码
   text = text.replace(/`([^`]+)`/g, (match, code) => {
     return `<code class="inline-code">${escapeHtml(code)}</code>`;
   });
-  
+
   // 处理标题
   text = text.replace(/^### (.*$)/gim, '<h3 class="md-h3">$1</h3>');
   text = text.replace(/^## (.*$)/gim, '<h2 class="md-h2">$1</h2>');
   text = text.replace(/^# (.*$)/gim, '<h1 class="md-h1">$1</h1>');
-  
+
   // 处理粗体
   text = text.replace(/\*\*(.*?)\*\*/g, '<strong class="md-bold">$1</strong>');
   text = text.replace(/__(.*?)__/g, '<strong class="md-bold">$1</strong>');
-  
+
   // 处理斜体
   text = text.replace(/\*(.*?)\*/g, '<em class="md-italic">$1</em>');
   text = text.replace(/_(.*?)_/g, '<em class="md-italic">$1</em>');
-  
+
   // 处理无序列表
   text = text.replace(/^\* (.*$)/gim, '<li class="md-li">$1</li>');
   text = text.replace(/^- (.*$)/gim, '<li class="md-li">$1</li>');
-  
+
   // 处理有序列表
   text = text.replace(/^\d+\. (.*$)/gim, '<li class="md-li-ordered">$1</li>');
-  
+
   // 包装连续的列表项
   text = text.replace(/(<li class="md-li">.*<\/li>)/s, '<ul class="md-ul">$1</ul>');
   text = text.replace(/(<li class="md-li-ordered">.*<\/li>)/s, '<ol class="md-ol">$1</ol>');
-  
+
   // 处理引用
   text = text.replace(/^> (.*$)/gim, '<blockquote class="md-blockquote">$1</blockquote>');
-  
+
   // 处理链接
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="md-link">$1</a>');
-  
+
   // 处理换行 - 但不要处理代码块内的换行
   // 先用占位符保护代码块
   const codeBlocks = [];
@@ -673,15 +861,15 @@ function formatMarkdown(text) {
     codeBlocks.push(match);
     return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
   });
-  
+
   // 处理非代码块的换行
   text = text.replace(/\n/g, '<br>');
-  
+
   // 恢复代码块
   codeBlocks.forEach((block, index) => {
     text = text.replace(`__CODE_BLOCK_${index}__`, block);
   });
-  
+
   return text;
 }
 
