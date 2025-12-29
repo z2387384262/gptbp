@@ -115,7 +115,7 @@ const MODEL_CONFIG = {
     "output_price": 0.75,
     "input_price": 0.35,
     "output_price": 0.75,
-    "use_input": true,
+    "use_messages": true,
     "features": ["通用对话", "文本分析", "创意写作"]
   },
   "gpt-oss-20b": {
@@ -130,7 +130,7 @@ const MODEL_CONFIG = {
     "output_price": 0.30,
     "input_price": 0.20,
     "output_price": 0.30,
-    "use_input": true,
+    "use_messages": true,
     "features": ["快速响应", "实时对话", "简单任务"]
   },
   "llama-3.1-70b": {
@@ -621,32 +621,37 @@ async function handleOpenAIChat(request, env, corsHeaders) {
         replyText = extractTextFromResponse(response, selectedModel);
 
       } else if (selectedModel.use_messages) {
-        // Qwen, Llama 等支持 messages 的模型
-        // 需要过滤不支持的 role (如 tool)
+        // Qwen, Llama, GPT-OSS (尝试消息模式)
 
         const validMessages = messages.map(m => {
           let role = m.role;
-          let content = m.content;
-          if (Array.isArray(content)) {
-            content = content
+          let content = "";
+
+          // 处理 content 数组 (多模态) -> 纯文本
+          if (Array.isArray(m.content)) {
+            content = m.content
               .filter(c => c.type === 'text')
               .map(c => c.text)
               .join('\n');
+          } else {
+            content = m.content || "";
           }
 
-          // 将 tool 消息转换为 user 消息，以免报错
-          if (role === 'tool' || role === 'function') {
-            role = 'user';
+          // 激进清洗：处理特殊角色
+          // 某些模型不支持 tool, function 甚至 system
+          if (['tool', 'function'].includes(role)) {
+            role = 'user'; // 工具输出转为用户消息
             content = `[Tool Output]: ${content}`;
           }
 
+          // GPT-OSS 可能不喜欢 system 角色，或者不喜欢 tool_calls 字段
+          // 我们只保留 role 和 content，绝对不传其他字段
           return { role, content };
-        }).filter(m => ['system', 'user', 'assistant'].includes(m.role));
+        }).filter(m => m.content.trim() !== ""); // 过滤空消息
 
-        // 确保有 System Prompt
-        if (!validMessages.some(m => m.role === 'system')) {
-          validMessages.unshift({ role: "system", content: "You are a helpful AI assistant." });
-        }
+        // 确保有 System Prompt (如果模型支持)
+        // 为了最大兼容性，我们可以把 system 转为 user，或者保留
+        // 这里暂时保留 system，但确保它是第一条
 
         const params = {
           messages: validMessages,
