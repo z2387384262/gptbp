@@ -690,6 +690,10 @@ async function handleOpenAIChat(request, env, corsHeaders) {
       // 2. 移除 markdown 代码块包裹
       if (replyText.includes('<tool_code>') || replyText.includes('<read_file>') || replyText.includes('<attempt_completion>') || replyText.includes('<list_files>')) {
         replyText = replyText.replace(/```xml\s*/gi, '').replace(/```\s*/g, '');
+
+        // 3. 格式化 XML: 在标签之间增加换行符，因为 Roo Code 的正则可能依赖换行
+        // 将 >< 替换为 >\n<
+        replyText = replyText.replace(/>\s*</g, '>\n<');
       }
     }
 
@@ -810,6 +814,28 @@ function extractTextFromResponse(response, modelConfig) {
   // 如果还是找不到，返回完整的响应用于调试
   console.log('无法提取文本，完整响应:', JSON.stringify(response, null, 2));
   return `无法从响应中提取文本内容。响应结构: ${Object.keys(response).join(', ')}`;
+}
+
+// 如果怀疑模型应该发起工具调用但没有返回 XML 标签，则尝试用更严格的提示重试一次
+async function attemptToolRetry(env, selectedModel, originalMessages, modelKey) {
+  try {
+    const retryInstruction = '如果你需要调用外部工具（如读取文件或列出目录），请仅输出原始 XML 工具调用，例如：<read_file><path>README.md</path></read_file>。不要添加任何额外文字或解释。严格使用 XML 标签输出。';
+
+    const retryMessages = Array.isArray(originalMessages) ? [...originalMessages] : [];
+    retryMessages.push({ role: 'user', content: retryInstruction });
+
+    const params = {
+      messages: retryMessages,
+      ...getModelOptimalParams(modelKey, selectedModel.id)
+    };
+    delete params.stream;
+
+    const retryResponse = await env.AI.run(selectedModel.id, params);
+    return retryResponse;
+  } catch (err) {
+    console.error('attemptToolRetry error:', err);
+    return null;
+  }
 }
 
 // 自动检测并格式化代码内容
