@@ -93,7 +93,9 @@ const MODEL_CONFIG = {
     "max_output": 8192,
     "input_price": 0.50,
     "output_price": 4.88,
-    "use_messages": true,
+    "input_price": 0.50,
+    "output_price": 4.88,
+    "use_prompt": true,
     "features": ["思维链推理", "数学计算", "代码生成"]
   },
   "gpt-oss-120b": {
@@ -118,16 +120,16 @@ const MODEL_CONFIG = {
     "use_input": true,
     "features": ["快速响应", "实时对话", "简单任务"]
   },
-  "llama-4-scout": {
-    "id": "@cf/meta/llama-4-scout-17b-16e-instruct",
-    "name": "Meta Llama 4 Scout",
-    "description": "多模态模型，支持文本和图像理解分析",
-    "context": 131000,
+  "llama-3.1-70b": {
+    "id": "@cf/meta/llama-3.1-70b-instruct",
+    "name": "Meta Llama 3.1 70B",
+    "description": "强大的开源大模型，擅长复杂任务",
+    "context": 128000,
     "max_output": 4096,
-    "input_price": 0.27,
-    "output_price": 0.85,
+    "input_price": 0.35,
+    "output_price": 0.40,
     "use_messages": true,
-    "features": ["多模态", "图像理解", "长文档分析"]
+    "features": ["通用对话", "复杂推理", "文本生成"]
   },
   "qwen-coder": {
     "id": "@cf/qwen/qwen2.5-coder-32b-instruct",
@@ -536,16 +538,11 @@ async function handleOpenAIChat(request, env, corsHeaders) {
 
     // 暂时不支持流式 (Roo Code 可以配置为不使用流式, 或者我们需要实现流式)
     // 为了简化，先实现非流式
-    if (stream) {
-      // 如果必须支持流式，这里需要大幅修改。目前先返回错误或忽略stream参数(如果客户端能处理)
-      // 更好的做法是返回一个错误提示不支持流式
-      // return new Response(JSON.stringify({ error: { message: 'Stream not supported yet', type: 'invalid_request_error', param: 'stream', code: null } }), { status: 400, headers: corsHeaders });
-
-      // 或者尝试非流式返回，但但这通常会破坏客户端。
-      // 策略：忽略 stream 参数，直接返回完整响应。OpenAI 库通常能处理一次性返回的数据包吗？
-      // 不，流式请求期望的是 SSE (Server-Sent Events)。
-      // 如果用户在 Roo Code 中开启了 Stream，这里会失败。
-      // 建议用户在 Roo Code 关闭 Stream。
+    // 强制关闭 stream，因为我们没有实现流式响应
+    // 即使客户端请求 stream=true，我们也试图返回非流式
+    // 注意：Roo Code 可能会对此感到困惑，但比直接报错好
+    if (Object.prototype.hasOwnProperty.call(body, 'stream')) {
+      delete body.stream;
     }
 
     let response;
@@ -575,12 +572,19 @@ async function handleOpenAIChat(request, env, corsHeaders) {
 
       } else if (selectedModel.use_prompt) {
         // 将 messages 转换为 prompt string
-        const prompt = messages.map(m => `${m.role}: ${m.content}`).join('\n') + "\nassistant:";
+        const prompt = messages.map(m => {
+          // 简单的 ChatML 风格或者 User/Assistant 风格
+          // DeepSeek 推荐 User: / Assistant: 或者 standard prompt
+          return `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`;
+        }).join('\n') + "\nAssistant:";
+
         const params = {
           prompt: prompt,
+          raw: true, // 尝试 raw 模式以避免模板问题
           ...getModelOptimalParams(model, selectedModel.id)
         };
-        params.stream = false;
+        // 确保不传 stream
+        delete params.stream;
 
         response = await env.AI.run(selectedModel.id, params);
         replyText = extractTextFromResponse(response, selectedModel);
