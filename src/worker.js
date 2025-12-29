@@ -108,7 +108,9 @@ const MODEL_CONFIG = {
     "output_price": 0.75,
     "input_price": 0.35,
     "output_price": 0.75,
-    "use_prompt": true,
+    "input_price": 0.35,
+    "output_price": 0.75,
+    "use_messages": true,
     "features": ["通用对话", "文本分析", "创意写作"]
   },
   "gpt-oss-20b": {
@@ -119,7 +121,9 @@ const MODEL_CONFIG = {
     "max_output": 2048,
     "input_price": 0.20,
     "output_price": 0.30,
-    "use_prompt": true,
+    "input_price": 0.20,
+    "output_price": 0.30,
+    "use_messages": true,
     "features": ["快速响应", "实时对话", "简单任务"]
   },
   "llama-3.1-70b": {
