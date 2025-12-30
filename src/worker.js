@@ -1087,7 +1087,7 @@ function getHTML() {
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100vh; overflow: hidden; }
-        .container { width: 100vw; height: 100vh; background: white; display: flex; flex-direction: column; }
+        .container { width: 100vw; height: 100vh; background: white; display: flex; flex-direction: column; overflow-y: auto; }
         .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 20px; text-align: center; }
         .author-info { margin-top: 10px; padding: 8px 16px; background: rgba(255,255,255,0.1); border-radius: 20px; display: inline-block; cursor: pointer; transition: all 0.3s ease; }
         .author-info:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
@@ -1212,6 +1212,16 @@ function getHTML() {
         .md-blockquote { background: #f3f4f6; border-left: 4px solid #6b7280; padding: 10px 15px; margin: 10px 0; font-style: italic; color: #4b5563; }
         .md-link { color: #3b82f6; text-decoration: underline; }
         .md-link:hover { color: #1d4ed8; }
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .main-content { flex-direction: column; }
+            .sidebar { display: none; width: 100%; }
+            .sidebar.show { display: block; }
+            .toggle-btn { display: inline-block; margin-top: 10px; background: #4f46e5; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 14px; }
+            .header h1 { font-size: 20px; }
+            .btn, .send-btn { font-size: 14px; padding: 8px 12px; }
+            .message-input { font-size: 14px; }
+        }
     </style>
 </head>
 <body>
@@ -1219,6 +1229,7 @@ function getHTML() {
         <div class="header">
             <h1>🤖 CF AI Chat</h1>
             <p>支持多模型切换的智能聊天助手</p>
+            <button class="btn toggle-btn" id="sidebarToggle" onclick="toggleSidebar()">☰ 侧边栏</button>
             <div class="author-info" onclick="window.open('https://www.youtube.com/@%E5%BA%B7%E5%BA%B7%E7%9A%84V2Ray%E4%B8%8EClash', '_blank')">
                 <p>📺 作者：<strong>YouTube：康康的订阅天地</strong></p>
             </div>
@@ -1309,6 +1320,14 @@ function getHTML() {
             }
         }
         setInterval(protectSidebar, 1000);
+
+        // Sidebar toggle for mobile
+        function toggleSidebar() {
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) {
+                sidebar.classList.toggle('show');
+            }
+        }
         
         let isAuthenticated = false, currentPassword = '', models = {}, chatHistory = [], currentModel = '';
         window.onload = async function() {
