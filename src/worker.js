@@ -1097,7 +1097,7 @@ function getHTML() {
         .author-info strong { color: #ffd700; }
         .main-content { display: flex; flex: 1; overflow: hidden; }
         .sidebar { width: 300px; min-width: 300px; background: #f8fafc; border-right: 1px solid #e2e8f0; padding: 20px; overflow-y: auto; display: block !important; visibility: visible !important; flex-shrink: 0; }
-        .chat-area { flex: 1; display: flex; flex-direction: column; }
+        .chat-area { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
         .auth-section { 
             background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 50%, #fecfef 100%); 
             border: 2px solid #ff6b9d; border-radius: 15px; padding: 20px; margin-bottom: 20px; 
@@ -1116,7 +1116,7 @@ function getHTML() {
         .btn { background: #4f46e5; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; margin: 5px; }
         .btn:hover { background: #4338ca; }
         .btn-secondary { background: #6b7280; }
-        .messages { flex: 1; overflow-y: auto; padding: 20px; background: #fafafa; }
+        .messages { flex: 1; overflow-y: auto; padding: 20px; background: #fafafa; padding-bottom: 80px; word-break: break-word; overflow-wrap: anywhere; min-height: 0; height: 100%; }
         .message { margin-bottom: 20px; max-width: 80%; }
         .message.user { margin-left: auto; }
         .message-content { padding: 15px; border-radius: 15px; line-height: 1.6; }
@@ -1225,6 +1225,12 @@ function getHTML() {
         /* Responsive adjustments */
         /* Responsive adjustments */
         .toggle-btn { display: none; position: relative; z-index: 1100; }
+
+        /* 新增：让 .main-content 充满剩余空间并采用弹性布局 */
+        .main-content {
+            flex: 1;               /* 占据父容器剩余高度 */
+            display: flex;         /* 子元素（.sidebar、.chat-area）使用 flex 布局 */
+        }
         
         @media (max-width: 768px) {
             .main-content { position: relative; }
@@ -1324,6 +1330,16 @@ function getHTML() {
             .message-input { min-height: 44px; padding: 10px; font-size: 16px; /* Prevent zoom on iOS */ }
             .send-btn { height: 44px; padding: 0 15px; }
         }
+    .messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 20px;
+        background: #fafafa;
+        padding-bottom: 80px;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        min-height: 0;
+    }
     </style>
 </head>
 <body>
