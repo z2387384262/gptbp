@@ -1213,14 +1213,96 @@ function getHTML() {
         .md-link { color: #3b82f6; text-decoration: underline; }
         .md-link:hover { color: #1d4ed8; }
         /* Responsive adjustments */
-        @media (max-width: 600px) {
-            .main-content { flex-direction: column; }
-            .sidebar { display: none; width: 100%; }
-            .sidebar.show { display: block; }
-            .toggle-btn { display: inline-block; margin-top: 10px; background: #4f46e5; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 14px; }
-            .header h1 { font-size: 20px; }
-            .btn, .send-btn { font-size: 14px; padding: 8px 12px; }
-            .message-input { font-size: 14px; }
+        /* Responsive adjustments */
+        .toggle-btn { display: none; }
+        
+        @media (max-width: 768px) {
+            .main-content { position: relative; }
+            
+            .sidebar { 
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100vh;
+                width: 85%; /* Slightly wider for better mobile usability */
+                max-width: 320px;
+                z-index: 1000;
+                transform: translateX(-100%);
+                transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                display: flex !important;
+                flex-direction: column;
+                box-shadow: 2px 0 15px rgba(0,0,0,0.2);
+            }
+            
+            .sidebar.show { 
+                transform: translateX(0); 
+            }
+            
+            /* Overlay for sidebar */
+            .sidebar-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0,0,0,0.5);
+                z-index: 999;
+                display: none;
+                opacity: 0;
+                transition: opacity 0.3s ease;
+                backdrop-filter: blur(2px);
+            }
+            
+            .sidebar-overlay.show { 
+                display: block; 
+                opacity: 1; 
+            }
+
+            .toggle-btn { 
+                display: inline-flex !important; 
+                align-items: center;
+                gap: 5px;
+                background: rgba(255,255,255,0.2); 
+                border: 1px solid rgba(255,255,255,0.3);
+                padding: 6px 12px;
+                font-size: 14px;
+                height: 36px;
+                margin: 0;
+            }
+            
+            .header {
+                padding: 10px 15px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+            
+            .header h1 { 
+                font-size: 18px; 
+                margin: 0;
+                flex: 1;
+                text-align: left;
+            }
+            
+            .header p { 
+                display: none; /* Hide subtitle on mobile */
+            }
+            
+            .author-info { 
+                margin: 0;
+                padding: 4px 10px;
+                font-size: 11px;
+                white-space: nowrap;
+            }
+
+            .message { max-width: 92%; }
+            .message-content { padding: 12px; font-size: 15px; }
+            
+            .input-area { padding: 10px; }
+            .message-input { min-height: 44px; padding: 10px; font-size: 16px; /* Prevent zoom on iOS */ }
+            .send-btn { height: 44px; padding: 0 15px; }
         }
     </style>
 </head>
@@ -1235,6 +1317,7 @@ function getHTML() {
             </div>
         </div>
         <div class="main-content">
+            <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
             <div class="sidebar">
                 <div class="auth-section" id="authSection">
                     <div class="input-group">
@@ -1322,10 +1405,15 @@ function getHTML() {
         setInterval(protectSidebar, 1000);
 
         // Sidebar toggle for mobile
+        // Sidebar toggle for mobile
         function toggleSidebar() {
             const sidebar = document.querySelector('.sidebar');
+            const overlay = document.querySelector('.sidebar-overlay');
             if (sidebar) {
                 sidebar.classList.toggle('show');
+            }
+            if (overlay) {
+                overlay.classList.toggle('show');
             }
         }
         
