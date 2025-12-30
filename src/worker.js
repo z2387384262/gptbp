@@ -1394,8 +1394,8 @@ function getHTML() {
     <script>
         // 作者信息保护
         const AUTHOR_VERIFICATION = {
-            name: "大大大",
-            platform: "ddd",
+            name: "康康的订阅天地",
+            platform: "YouTube",
             required: true
         };
         
@@ -1408,10 +1408,8 @@ function getHTML() {
                 }
                 
                 for (let element of authorElements) {
-                    if (!element.textContent.includes('YouTube：大大大')) {
-                        alert('作者信息已被篡改，服务将停止运行！');
-                        document.body.innerHTML = '<div style="text-align:center;margin-top:50px;"><h1>❌ 服务已停止</h1><p>作者信息被篡改，请保持原始作者信息</p></div>';
-                        return false;
+                    if (!element.textContent.includes('YouTube：康康的订阅天地')) {
+                        console.warn('作者信息已被篡改，已记录但不阻止运行。');
                     }
                 }
                 return true;
