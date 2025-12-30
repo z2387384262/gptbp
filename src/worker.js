@@ -1120,7 +1120,15 @@ function getHTML() {
         .message-content { padding: 15px; border-radius: 15px; line-height: 1.6; }
         .message.user .message-content { background: #4f46e5; color: white; }
         .message.assistant .message-content { background: white; border: 1px solid #e2e8f0; }
-        .input-area { background: white; border-top: 1px solid #e2e8f0; padding: 20px; }
+        .input-area {
+          background: white;
+          border-top: 1px solid #e2e8f0;
+          padding: 20px;
+          position: sticky;
+          bottom: 0;
+          width: 100%;
+          z-index: 10;
+        }
         .input-container { display: flex; gap: 10px; align-items: flex-end; }
         .message-input { flex: 1; min-height: 50px; padding: 15px; border: 1px solid #d1d5db; border-radius: 12px; resize: none; }
         .send-btn { height: 50px; padding: 0 20px; background: #10b981; border-radius: 12px; }
@@ -1299,8 +1307,17 @@ function getHTML() {
 
             .message { max-width: 92%; }
             .message-content { padding: 12px; font-size: 15px; }
+            .chat-area { padding-bottom: 80px; }
             
-            .input-area { padding: 10px; }
+            .input-area {
+              background: white;
+              border-top: 1px solid #e2e8f0;
+              padding: 10px;
+              position: sticky;
+              bottom: 0;
+              width: 100%;
+              z-index: 10;
+            }
             .message-input { min-height: 44px; padding: 10px; font-size: 16px; /* Prevent zoom on iOS */ }
             .send-btn { height: 44px; padding: 0 15px; }
         }
