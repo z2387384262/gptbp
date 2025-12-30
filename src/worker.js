@@ -1083,7 +1083,7 @@ function getHTML() {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
-    <title>CF AI Chat</title>
+    <title>大大大</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { -webkit-text-size-adjust: 100%; }
@@ -1378,7 +1378,7 @@ function getHTML() {
             <div class="chat-area">
                 <div class="messages" id="messages">
                     <div class="message assistant">
-                        <div class="message-content">👋 欢迎使用CF AI Chat！请先输入密码验证身份，然后选择一个AI模型开始聊天。<br><br>🇨🇳 所有AI模型都已配置为使用中文回复，无论您使用什么语言提问，AI都会用中文回答您的问题。</div>
+                        <div class="message-content">👋 欢迎使用大大大！请先输入密码验证身份，然后选择一个AI模型开始聊天。<br><br>🇨🇳 所有AI模型都已配置为使用中文回复，无论您使用什么语言提问，AI都会用中文回答您的问题。</div>
                     </div>
                 </div>
                 <div class="loading" id="loading">🤔 AI正在思考中...</div>
