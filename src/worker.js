@@ -1086,6 +1086,8 @@ function getHTML() {
     <title>CF AI Chat</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { -webkit-text-size-adjust: 100%; }
+        textarea, input { font-size: 16px; }
         body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); height: 100vh; overflow: hidden; }
         .container { width: 100%; height: 100%; background: white; display: flex; flex-direction: column; overflow-y: auto; }
         .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; padding: 20px; text-align: center; }
@@ -1310,13 +1312,14 @@ function getHTML() {
             .chat-area { padding-bottom: 80px; }
             
             .input-area {
-              background: white;
-              border-top: 1px solid #e2e8f0;
-              padding: 10px;
-              position: sticky;
-              bottom: 0;
-              width: 100%;
-              z-index: 10;
+                background: white;
+                border-top: 1px solid #e2e8f0;
+                padding: 10px;
+                position: fixed;      /* 固定在视口底部 */
+                bottom: 0;
+                left: 0;
+                width: 100%;
+                z-index: 10;
             }
             .message-input { min-height: 44px; padding: 10px; font-size: 16px; /* Prevent zoom on iOS */ }
             .send-btn { height: 44px; padding: 0 15px; }
