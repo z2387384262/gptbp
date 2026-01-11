@@ -657,14 +657,9 @@ async function handleOpenAIChat(request, env, corsHeaders) {
 
     console.log('Selected model:', selectedModel.name, 'ID:', selectedModel.id);
 
-    // 暂时不支持流式 (Roo Code 可以配置为不使用流式, 或者我们需要实现流式)
-    // 为了简化，先实现非流式
-    // 强制关闭 stream，因为我们没有实现流式响应
-    // 即使客户端请求 stream=true，我们也试图返回非流式
-    // 注意：Roo Code 可能会对此感到困惑，但比直接报错好
-    if (body && Object.prototype.hasOwnProperty.call(body, 'stream')) {
-      delete body.stream;
-    }
+    // 检查是否请求流式响应
+    const requestStream = body.stream === true;
+    console.log('Request stream:', requestStream);
 
     let response;
     let replyText = "";
@@ -901,6 +896,48 @@ async function handleOpenAIChat(request, env, corsHeaders) {
       }
     };
 
+    console.log('=== Response ===');
+    console.log('Status: 200 OK');
+    console.log('Response ID:', openAIResponse.id);
+    console.log('Content length:', messageContent?.length);
+    console.log('Finish reason:', finishReason);
+    console.log('Request stream:', requestStream);
+
+    // 如果请求流式响应，返回 SSE 格式
+    if (requestStream) {
+      console.log('Returning SSE stream format');
+
+      // 将完整内容作为单个 chunk 返回（模拟流式）
+      const chunk = {
+        id: openAIResponse.id,
+        object: "chat.completion.chunk",
+        created: openAIResponse.created,
+        model: openAIResponse.model,
+        choices: [
+          {
+            index: 0,
+            delta: {
+              content: messageContent
+            },
+            finish_reason: finishReason
+          }
+        ]
+      };
+
+      // SSE 格式响应
+      const sseResponse = `data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`;
+
+      return new Response(sseResponse, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          ...corsHeaders
+        }
+      });
+    }
+
+    // 非流式响应
     return new Response(JSON.stringify(openAIResponse), {
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
