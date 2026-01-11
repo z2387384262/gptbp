@@ -228,7 +228,7 @@ export default {
       }
 
       // 匹配 /v1/models, /models, 或带尾随斜杠
-      if ((url.pathname.endsWith('/models') || url.pathname.endsWith('/models/')) && request.method === 'GET') {
+      if (((url.pathname === '/v1/models') || url.pathname.endsWith('/models') || url.pathname.endsWith('/models/')) && request.method === 'GET') {
         return await handleOpenAIModels(request, env, corsHeaders);
       }
 
