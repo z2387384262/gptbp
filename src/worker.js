@@ -221,6 +221,11 @@ export default {
         return await debugGPT(request, env, corsHeaders);
       }
 
+      // 快速测试端点 - 测试模型是否可用
+      if (url.pathname === '/v1/test-model' && request.method === 'POST') {
+        return await testModel(request, env, corsHeaders);
+      }
+
       // Roo Code / OpenAI 兼容接口 - 宽松路由匹配
       // 匹配 /v1/chat/completions, /chat/completions, 或带尾随斜杠
       if ((url.pathname.endsWith('/chat/completions') || url.pathname.endsWith('/chat/completions/')) && request.method === 'POST') {
@@ -492,6 +497,68 @@ async function debugGPT(request, env, corsHeaders) {
   }
 }
 
+// 快速测试模型函数
+async function testModel(request, env, corsHeaders) {
+  try {
+    const { model = 'gpt-oss-120b', password } = await request.json() || {};
+
+    // 验证密码
+    if (password !== env.CHAT_PASSWORD) {
+      return new Response(JSON.stringify({ error: '密码错误' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    const selectedModel = MODEL_CONFIG[model];
+    if (!selectedModel) {
+      return new Response(JSON.stringify({ error: `模型 ${model} 不存在` }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
+    }
+
+    console.log(`=== 测试模型: ${selectedModel.name} ===`);
+
+    // 简单测试
+    const startTime = Date.now();
+    const response = await Promise.race([
+      env.AI.run(selectedModel.id, {
+        input: 'Say "OK" if you understand this message.',
+        max_tokens: 10
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout')), 15000)
+      )
+    ]);
+    const duration = Date.now() - startTime;
+
+    const reply = extractTextFromResponse(response, selectedModel);
+
+    return new Response(JSON.stringify({
+      success: true,
+      model: selectedModel.name,
+      model_id: selectedModel.id,
+      duration_ms: duration,
+      response: reply,
+      raw_response: typeof response === 'object' ? Object.keys(response) : typeof response
+    }), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+
+  } catch (error) {
+    console.error('Test model error:', error);
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    });
+  }
+}
+
 // === OpenAI 兼容 API 处理函数 ===
 
 // 处理 /v1/models 请求
@@ -666,8 +733,18 @@ async function handleOpenAIChat(request, env, corsHeaders) {
         console.log('Calling AI with model:', selectedModel.id);
         console.log('Prompt length:', fullPrompt.length);
 
-        response = await env.AI.run(selectedModel.id, params);
-        console.log('AI response received');
+        try {
+          response = await Promise.race([
+            env.AI.run(selectedModel.id, params),
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('AI request timeout')), 30000)
+            )
+          ]);
+          console.log('AI response received');
+        } catch (timeoutError) {
+          console.error('AI timeout or error:', timeoutError);
+          throw new Error(`AI model request failed: ${timeoutError.message}`);
+        }
 
         replyText = extractTextFromResponse(response, selectedModel);
         console.log('Extracted reply length:', replyText?.length);
@@ -828,13 +905,21 @@ async function handleOpenAIChat(request, env, corsHeaders) {
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
 
-  } catch (error) {
-    console.error('Wrapper error:', error);
-    return new Response(JSON.stringify({ error: { message: 'Internal Server Error', type: 'server_error', param: null, code: null } }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
+      } catch (error) {
+        console.error('Wrapper error:', error);
+        console.error('Error stack:', error.stack);
+        return new Response(JSON.stringify({
+          error: {
+            message: `Internal Server Error: ${error.message}`,
+            type: 'server_error',
+            param: null,
+            code: null
+          }
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
 }
 
 // 修复的响应文本提取函数
