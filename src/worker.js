@@ -1732,7 +1732,7 @@ function getHTML() {
             navigator.clipboard.writeText(testCode).then(() => {
                 console.log('✅ 剪贴板功能正常');
             }).catch(err => {
-                console.log('❌ 剪贴板功能异常:', err);
+                console.log('❌ 剪贴板功能异常2:', err);
             });
         }
         
