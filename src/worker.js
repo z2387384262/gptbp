@@ -227,6 +227,17 @@ export default {
         return await handleOpenAIChat(request, env, corsHeaders);
       }
 
+      // 调试端点 - 测试 API 连接
+      if (url.pathname === '/v1/health' && request.method === 'GET') {
+        return new Response(JSON.stringify({
+          status: 'ok',
+          models: Object.keys(MODEL_CONFIG),
+          timestamp: new Date().toISOString()
+        }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
+
       // 匹配 /v1/models, /models, 或带尾随斜杠
       if (((url.pathname === '/v1/models') || url.pathname.endsWith('/models') || url.pathname.endsWith('/models/')) && request.method === 'GET') {
         return await handleOpenAIModels(request, env, corsHeaders);
@@ -512,36 +523,72 @@ async function handleOpenAIModels(request, env, corsHeaders) {
 // 处理 /v1/chat/completions 请求
 async function handleOpenAIChat(request, env, corsHeaders) {
   try {
-    // 1. 验证权限
+    console.log('=== OpenAI Chat Request ===');
+    console.log('URL:', request.url);
+    console.log('Headers:', Object.fromEntries(request.headers));
+
+    // 1. 验证权限 - 更灵活的 token 提取
+    let token = null;
     const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader?.startsWith('Bearer ')) {
+
+    if (authHeader) {
+      if (authHeader.startsWith('Bearer ')) {
+        token = authHeader.replace('Bearer ', '');
+      } else {
+        token = authHeader;
+      }
+    }
+
+    // 如果 Authorization header 没有，尝试其他可能的 header
+    if (!token) {
+      token = request.headers.get('x-api-key') ||
+              request.headers.get('api-key') ||
+              request.headers.get('api_key');
+    }
+
+    console.log('Token found:', !!token);
+
+    if (!token) {
       return new Response(JSON.stringify({ error: { message: 'Missing Authorization header', type: 'invalid_request_error', param: null, code: null } }), {
         status: 401,
         headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
     }
 
-    const token = authHeader.replace('Bearer ', '');
     if (token !== env.CHAT_PASSWORD) {
+      console.log('Token mismatch - received:', token.substring(0, 5) + '...');
       return new Response(JSON.stringify({ error: { message: 'Invalid API Key', type: 'invalid_request_error', param: null, code: 'invalid_api_key' } }), {
         status: 401,
         headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
     }
 
+    console.log('Token validated successfully');
+
     // 2. 解析请求体
     const body = await request.json();
     const { model, messages, stream } = body || {};
 
-    // 检查模型是否存在
-    if (!MODEL_CONFIG[model]) {
+    console.log('Request model:', model);
+    console.log('Messages count:', messages?.length);
+
+    // 检查模型是否存在（支持带前缀的模型名）
+    let selectedModel = MODEL_CONFIG[model];
+    if (!selectedModel) {
+      // 尝试去掉前缀匹配（如 xtm/gpt-oss-120b -> gpt-oss-120b）
+      const baseModelName = model.split('/').pop();
+      selectedModel = MODEL_CONFIG[baseModelName];
+    }
+
+    if (!selectedModel) {
+      console.log('Model not found:', model);
       return new Response(JSON.stringify({ error: { message: `Model ${model} not found`, type: 'invalid_request_error', param: 'model', code: 'model_not_found' } }), {
         status: 404,
         headers: { 'Content-Type': 'application/json', ...corsHeaders }
       });
     }
 
-    const selectedModel = MODEL_CONFIG[model];
+    console.log('Selected model:', selectedModel.name, 'ID:', selectedModel.id);
 
     // 暂时不支持流式 (Roo Code 可以配置为不使用流式, 或者我们需要实现流式)
     // 为了简化，先实现非流式
@@ -603,6 +650,7 @@ async function handleOpenAIChat(request, env, corsHeaders) {
             input: fullPrompt,
             max_tokens: 4096
           };
+          console.log('Using GPT-OSS input mode');
         } else {
           // DeepSeek / Gemma 使用 prompt
           params = {
@@ -610,12 +658,19 @@ async function handleOpenAIChat(request, env, corsHeaders) {
             raw: true,
             ...getModelOptimalParams(model, selectedModel.id)
           };
+          console.log('Using prompt mode');
         }
 
         delete params.stream;
 
+        console.log('Calling AI with model:', selectedModel.id);
+        console.log('Prompt length:', fullPrompt.length);
+
         response = await env.AI.run(selectedModel.id, params);
+        console.log('AI response received');
+
         replyText = extractTextFromResponse(response, selectedModel);
+        console.log('Extracted reply length:', replyText?.length);
 
       } else if (selectedModel.use_messages) {
         // Qwen, Llama, GPT-OSS (尝试消息模式)
