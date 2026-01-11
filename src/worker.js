@@ -109,12 +109,6 @@ const MODEL_CONFIG = {
     "max_output": 4096,
     "input_price": 0.35,
     "output_price": 0.75,
-    "input_price": 0.35,
-    "output_price": 0.75,
-    "input_price": 0.35,
-    "output_price": 0.75,
-    "input_price": 0.35,
-    "output_price": 0.75,
     "use_input": true,
     "features": ["通用对话", "文本分析", "创意写作"]
   },
@@ -491,12 +485,12 @@ async function debugGPT(request, env, corsHeaders) {
 
 // 处理 /v1/models 请求
 async function handleOpenAIModels(request, env, corsHeaders) {
-  // 验证 Authorization Header
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader || authHeader.replace('Bearer ', '') !== env.CHAT_PASSWORD) {
-    // 为了兼容性，也可以选择不验证 models 接口，但为了安全最好验证
-    // 这里暂时放宽验证或者根据需求，标准OpenAI客户端会先列出模型
-  }
+   // 验证 Authorization Header
+   const authHeader = request.headers.get('Authorization');
+   if (authHeader && authHeader.replace('Bearer ', '') !== env.CHAT_PASSWORD) {
+     // 为了兼容性，也可以选择不验证 models 接口，但为了安全最好验证
+     // 这里暂时放宽验证或者根据需求，标准OpenAI客户端会先列出模型
+   }
 
   const modelsList = Object.keys(MODEL_CONFIG).map(key => {
     return {
@@ -520,7 +514,7 @@ async function handleOpenAIChat(request, env, corsHeaders) {
   try {
     // 1. 验证权限
     const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader || !authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: { message: 'Missing Authorization header', type: 'invalid_request_error', param: null, code: null } }), {
         status: 401,
         headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -537,7 +531,7 @@ async function handleOpenAIChat(request, env, corsHeaders) {
 
     // 2. 解析请求体
     const body = await request.json();
-    const { model, messages, stream } = body;
+    const { model, messages, stream } = body || {};
 
     // 检查模型是否存在
     if (!MODEL_CONFIG[model]) {
@@ -554,7 +548,7 @@ async function handleOpenAIChat(request, env, corsHeaders) {
     // 强制关闭 stream，因为我们没有实现流式响应
     // 即使客户端请求 stream=true，我们也试图返回非流式
     // 注意：Roo Code 可能会对此感到困惑，但比直接报错好
-    if (Object.prototype.hasOwnProperty.call(body, 'stream')) {
+    if (body && Object.prototype.hasOwnProperty.call(body, 'stream')) {
       delete body.stream;
     }
 
@@ -569,16 +563,18 @@ async function handleOpenAIChat(request, env, corsHeaders) {
         let promptKey = "prompt";
 
         // 构建 Prompt 字符串
-        let fullPrompt = messages.reduce((acc, msg) => {
+        let fullPrompt = (messages || []).reduce((acc, msg) => {
+          if (!msg) return acc;
+          
           let content = "";
           // 处理多模态/数组内容
-          if (Array.isArray(msg.content)) {
+          if (msg.content && Array.isArray(msg.content)) {
             content = msg.content
-              .filter(c => c.type === 'text')
+              .filter(c => c && c.type === 'text')
               .map(c => c.text)
               .join('\n');
           } else {
-            content = msg.content || "";
+            content = (msg.content || "").toString();
           }
 
           let roleLabel = "";
@@ -624,18 +620,20 @@ async function handleOpenAIChat(request, env, corsHeaders) {
       } else if (selectedModel.use_messages) {
         // Qwen, Llama, GPT-OSS (尝试消息模式)
 
-        const validMessages = messages.map(m => {
+        const validMessages = (messages || []).map(m => {
+          if (!m) return { role: 'user', content: '' };
+          
           let role = m.role;
           let content = "";
 
           // 处理 content 数组 (多模态) -> 纯文本
-          if (Array.isArray(m.content)) {
+          if (m.content && Array.isArray(m.content)) {
             content = m.content
-              .filter(c => c.type === 'text')
+              .filter(c => c && c.type === 'text')
               .map(c => c.text)
               .join('\n');
           } else {
-            content = m.content || "";
+            content = (m.content || "").toString();
           }
 
           // 激进清洗：处理特殊角色
